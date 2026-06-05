@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Battery Passport</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f6ff;
+      text-align: center;
+      padding: 30px;
+    }
+
+    .card {
+      background: white;
+      max-width: 430px;
+      margin: auto;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.15);
+    }
+
+    h1 {
+      color: #1e3a8a;
+    }
+
+    p {
+      font-size: 18px;
+    }
+
+    span {
+      font-weight: bold;
+      color: #2563eb;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="card">
+    <h1>Battery Passport</h1>
+
+    <p>Battery ID: <span id="batteryID">Loading...</span></p>
+    <p>Manufacturer: <span id="manufacturer">Loading...</span></p>
+    <p>Voltage: <span id="voltage">Loading...</span> V</p>
+    <p>Current: <span id="current">Loading...</span> mA</p>
+    <p>Power: <span id="power">Loading...</span> mW</p>
+    <p>SOC: <span id="soc">Loading...</span> %</p>
+    <p>MOSFET: <span id="mosfet">Loading...</span></p>
+  </div>
+
+  <script type="module">
+
+    import { initializeApp } 
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+    import { getFirestore, doc, onSnapshot } 
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCH6twfVj33X51OksHVuTpJRjBwF9Mqbhs",
+      authDomain: "major-cc830.firebaseapp.com",
+      projectId: "major-cc830",
+      storageBucket: "major-cc830.firebasestorage.app",
+      messagingSenderId: "907287322958",
+      appId: "1:907287322958:web:121c4c26f293a64baffe1f",
+      measurementId: "G-2TM66Y2H0N"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    console.log("Firestore connected");
+    console.log("Reading path: batpass/12345");
+
+    const batteryRef = doc(db, "batpass", "12345");
+
+    onSnapshot(batteryRef, (snapshot) => {
+
+      console.log("Snapshot received");
+
+      if (snapshot.exists()) {
+
+        console.log("Data found:", snapshot.data());
+
+        const data = snapshot.data();
+
+        document.getElementById("batteryID").innerText =
+          data.batteryID || "--";
+
+        document.getElementById("manufacturer").innerText =
+          data.manufacturer || "--";
+
+        document.getElementById("voltage").innerText =
+          Number(data.voltage || 0).toFixed(2);
+
+        document.getElementById("current").innerText =
+          Number(data.current_mA || 0).toFixed(2);
+
+        document.getElementById("power").innerText =
+          Number(data.power_mW || 0).toFixed(2);
+
+        document.getElementById("soc").innerText =
+          Number(data.soc || 0).toFixed(1);
+
+        document.getElementById("mosfet").innerText =
+          data.mosfetState ? "ON" : "OFF";
+
+      } else {
+        console.log("Document not found");
+      }
+
+    }, (error) => {
+      console.error("Firestore error:", error);
+    });
+
+  </script>
+
+</body>
+</html>
