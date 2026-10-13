@@ -1,11 +1,14 @@
-
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Battery Passport - Live Data</title>
+  <title>EV Battery Passport</title>
+
   <style>
+    * { box-sizing: border-box; }
+
     body {
       margin: 0;
       padding: 24px;
@@ -13,7 +16,16 @@
       background: #101722;
       color: #f4f7fb;
     }
-    main { max-width: 900px; margin: auto; }
+
+    main {
+      max-width: 1000px;
+      margin: auto;
+    }
+
+    h1 { color: #28d99a; }
+
+    .subtitle { color: #aab8c8; }
+
     .card {
       background: #1c2939;
       border: 1px solid #35465a;
@@ -21,40 +33,77 @@
       padding: 20px;
       margin: 16px 0;
     }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 12px;
     }
+
     .metric {
       background: #263548;
-      padding: 16px;
+      padding: 18px;
       border-radius: 10px;
     }
-    .label { color: #aab8c8; font-size: 14px; }
-    .value { font-size: 24px; font-weight: bold; margin-top: 10px; }
-    #status { color: #f5c451; }
+
+    .label {
+      color: #aab8c8;
+      font-size: 14px;
+    }
+
+    .value {
+      font-size: 23px;
+      font-weight: bold;
+      margin-top: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      color: #f5c451;
+      overflow-wrap: anywhere;
+    }
+
     button {
-      padding: 10px 16px;
+      padding: 11px 18px;
       border: 0;
       border-radius: 7px;
       background: #28d99a;
+      color: #101722;
       cursor: pointer;
       font-weight: bold;
     }
+
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+    }
+
+    .footer {
+      text-align: center;
+      color: #aab8c8;
+      font-size: 12px;
+      margin-top: 24px;
+    }
+
+    @media (max-width: 500px) {
+      body { padding: 12px; }
+      .value { font-size: 20px; }
+    }
   </style>
 </head>
+
 <body>
 <main>
   <h1>EV Battery Passport</h1>
-  <p>ESP32 + INA219 + Firebase Realtime Database</p>
+  <p class="subtitle">ESP32 + Battery Monitoring + Cloud Firestore</p>
 
   <section class="card">
-    <h2 id="batteryID">Battery ID: Waiting...</h2>
+    <h2 id="batteryID">Battery ID: Loading...</h2>
     <p>Manufacturer: <b id="manufacturer">--</b></p>
     <p>Connection: <b id="status">Connecting...</b></p>
-    <p>Last record timestamp: <span id="timestamp">Not provided</span></p>
-    <button id="refresh">Refresh once</button>
+    <p>Last updated: <span id="timestamp">Not provided</span></p>
+    <button id="refresh" type="button">Refresh Data</button>
   </section>
 
   <section class="grid">
@@ -62,26 +111,32 @@
       <div class="label">Voltage</div>
       <div class="value" id="voltage">--</div>
     </div>
+
     <div class="metric">
       <div class="label">Current</div>
       <div class="value" id="current">--</div>
     </div>
+
     <div class="metric">
       <div class="label">Power</div>
       <div class="value" id="power">--</div>
     </div>
+
     <div class="metric">
-      <div class="label">State of Charge</div>
+      <div class="label">State of Charge (SOC)</div>
       <div class="value" id="soc">--</div>
     </div>
+
     <div class="metric">
-      <div class="label">Depth of Discharge</div>
+      <div class="label">Depth of Discharge (DoD)</div>
       <div class="value" id="dod">--</div>
     </div>
+
     <div class="metric">
-      <div class="label">State of Health</div>
+      <div class="label">State of Health (SOH)</div>
       <div class="value" id="soh">--</div>
     </div>
+
     <div class="metric">
       <div class="label">MOSFET State</div>
       <div class="value" id="mosfet">--</div>
@@ -89,135 +144,179 @@
   </section>
 
   <section class="card">
-    <h3>Raw API Data</h3>
-    <pre id="rawData" style="white-space:pre-wrap;overflow-wrap:anywhere">Waiting for data...</pre>
+    <h3>Raw Firestore Data</h3>
+    <pre id="rawData">Waiting for data...</pre>
   </section>
+
+  <p class="footer">Battery Passport | Live Cloud Monitoring</p>
 </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script type="module">
+  import { initializeApp } from
+    "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
-<script>
-// A. Paste the values from Firebase Project Settings.
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "YOUR_REALTIME_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  appId: "YOUR_APP_ID"
-};
+  import {
+    getFirestore,
+    doc,
+    onSnapshot,
+    getDoc
+  } from
+    "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-// B. Replace this with the actual path in your database.
-// Examples only: "batteryData" or "batteries/BATTERY ID-001/latest".
-const DATA_PATH = "REPLACE_WITH_ACTUAL_DATA_PATH";
+  // Your Firebase web app configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyCH6twfVj33X51OksHVuTpJRjBwF9Mqbhs",
+    authDomain: "major-cc830.firebaseapp.com",
+    projectId: "major-cc830",
+    storageBucket: "major-cc830.firebasestorage.app",
+    messagingSenderId: "907287322958",
+    appId: "1:907287322958:web:121c4c26f293a64baffe1f",
+    measurementId: "G-2TM66Y2H0N"
+  };
 
-const $ = id => document.getElementById(id);
+  // Your actual Firestore collection and document
+  const COLLECTION_NAME = "batpass";
+  const DOCUMENT_ID = "12345";
 
-function showStatus(message, color = "#f5c451") {
-  $("status").textContent = message;
-  $("status").style.color = color;
-}
+  const $ = id => document.getElementById(id);
 
-function displayData(data) {
-  if (!data || typeof data !== "object") {
-    showStatus("No record found", "#ff626e");
-    return;
+  function setStatus(message, color = "#f5c451") {
+    $("status").textContent = message;
+    $("status").style.color = color;
   }
 
-  $("batteryID").textContent =
-    "Battery ID: " + (data.batteryID ?? "--");
+  function numberValue(value, digits = 2) {
+    if (value === null || value === undefined || value === "") {
+      return "--";
+    }
 
-  $("manufacturer").textContent =
-    data.manufacturer ?? "--";
+    const n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(digits) : "--";
+  }
 
-  $("voltage").textContent =
-    data.voltage == null ? "--" :
-    Number(data.voltage).toFixed(3) + " V";
+  function displayData(data) {
+    $("batteryID").textContent =
+      "Battery ID: " + (data.batteryID ?? "--");
 
-  $("current").textContent =
-    data.current_mA == null ? "--" :
-    Number(data.current_mA).toFixed(3) + " mA";
+    $("manufacturer").textContent =
+      data.manufacturer ?? "--";
 
-  $("power").textContent =
-    data.power_mW == null ? "--" :
-    Number(data.power_mW).toFixed(3) + " mW";
+    $("voltage").textContent =
+      numberValue(data.voltage, 3) + " V";
 
-  $("soc").textContent =
-    data.soc == null ? "--" :
-    Number(data.soc).toFixed(2) + "%";
+    $("current").textContent =
+      numberValue(data.current_mA, 3) + " mA";
 
-  $("dod").textContent =
-    data.dod == null ? "--" :
-    Number(data.dod).toFixed(2) + "%";
+    $("power").textContent =
+      numberValue(data.power_mW, 3) + " mW";
 
-  $("soh").textContent =
-    data.soh == null ? "--" :
-    Number(data.soh).toFixed(2) + "%";
+    $("soc").textContent =
+      numberValue(data.soc) + "%";
 
-  $("mosfet").textContent =
-    typeof data.mosfetState === "boolean"
-      ? (data.mosfetState ? "ON" : "OFF")
-      : "--";
+    $("dod").textContent =
+      numberValue(data.dod) + "%";
 
-  const ts = data.timestamp ?? data.updatedAt;
-  $("timestamp").textContent = ts == null
-    ? "Not provided"
-    : (typeof ts === "number"
-        ? new Date(ts < 1e12 ? ts * 1000 : ts)
-        : new Date(ts)).toLocaleString();
+    $("soh").textContent =
+      numberValue(data.soh) + "%";
 
-  $("rawData").textContent = JSON.stringify(data, null, 2);
-  showStatus("Live data received", "#28d99a");
-}
+    if (typeof data.mosfetState === "boolean") {
+      $("mosfet").textContent =
+        data.mosfetState ? "ON" : "OFF";
 
-function startConnection() {
-  if (
-    firebaseConfig.apiKey === "YOUR_API_KEY" ||
-    firebaseConfig.projectId === "YOUR_PROJECT_ID" ||
-    firebaseConfig.databaseURL === "YOUR_REALTIME_DATABASE_URL" ||
-    DATA_PATH === "REPLACE_WITH_ACTUAL_DATA_PATH"
-  ) {
-    showStatus("Complete Firebase configuration first");
-    return;
+      $("mosfet").style.color =
+        data.mosfetState ? "#28d99a" : "#ff626e";
+    } else {
+      $("mosfet").textContent = data.mosfetState ?? "--";
+      $("mosfet").style.color = "#f4f7fb";
+    }
+
+    const ts = data.timestamp ?? data.updatedAt;
+
+    if (ts == null) {
+      $("timestamp").textContent = "Not provided";
+    } else {
+      const date = typeof ts.toDate === "function"
+        ? ts.toDate()
+        : typeof ts === "number"
+          ? new Date(ts < 1e12 ? ts * 1000 : ts)
+          : new Date(ts);
+
+      $("timestamp").textContent =
+        Number.isNaN(date.getTime())
+          ? String(ts)
+          : date.toLocaleString();
+    }
+
+    $("rawData").textContent = JSON.stringify(data, (key, value) => {
+      if (
+        value &&
+        typeof value === "object" &&
+        typeof value.seconds === "number" &&
+        typeof value.nanoseconds === "number"
+      ) {
+        return new Date(value.seconds * 1000).toISOString();
+      }
+
+      return value;
+    }, 2);
+  }
+
+  async function refreshData(db, batteryRef) {
+    const snapshot = await getDoc(batteryRef);
+
+    if (!snapshot.exists()) {
+      setStatus("Document batpass/12345 not found", "#ff626e");
+      return;
+    }
+
+    displayData(snapshot.data());
+    setStatus("Refresh successful", "#28d99a");
   }
 
   try {
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
 
-    const db = firebase.database();
-    const ref = db.ref(DATA_PATH);
+    const batteryRef = doc(
+      db,
+      COLLECTION_NAME,
+      DOCUMENT_ID
+    );
 
-    // Real-time listener: updates the display whenever
-    // the selected database record changes.
-    ref.on("value", snapshot => {
+    // Automatically update whenever this Firestore document changes
+    onSnapshot(batteryRef, snapshot => {
       if (snapshot.exists()) {
-        displayData(snapshot.val());
+        displayData(snapshot.data());
+        setStatus("Connected - live updates enabled", "#28d99a");
       } else {
-        showStatus("Path exists, but no record was found", "#ff626e");
+        setStatus("Document batpass/12345 not found", "#ff626e");
+        $("rawData").textContent = "No battery record found.";
       }
     }, error => {
-      console.error(error);
-      showStatus("Read failed: " + error.message, "#ff626e");
+      console.error("Firestore listener error:", error);
+      setStatus("Read failed: " + error.message, "#ff626e");
     });
 
-    $("refresh").onclick = () => {
-      ref.once("value")
-        .then(snapshot => {
-          if (snapshot.exists()) displayData(snapshot.val());
-          else showStatus("No record found", "#ff626e");
-        })
-        .catch(error => showStatus(error.message, "#ff626e"));
-    };
+    $("refresh").addEventListener("click", async () => {
+      $("refresh").disabled = true;
+      $("refresh").textContent = "Refreshing...";
+
+      try {
+        await refreshData(db, batteryRef);
+      } catch (error) {
+        console.error(error);
+        setStatus("Refresh failed: " + error.message, "#ff626e");
+      } finally {
+        $("refresh").disabled = false;
+        $("refresh").textContent = "Refresh Data";
+      }
+    });
 
   } catch (error) {
-    console.error(error);
-    showStatus("Firebase initialization failed", "#ff626e");
+    console.error("Firebase initialization error:", error);
+    setStatus("Setup error: " + error.message, "#ff626e");
   }
-}
-
-startConnection();
 </script>
 </body>
 </html>
+```
