@@ -1,121 +1,444 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Battery Passport</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EV Battery Monitoring System</title>
 
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f6ff;
-      text-align: center;
-      padding: 30px;
-    }
+<style>
+* { box-sizing: border-box; }
 
-    .card {
-      background: white;
-      max-width: 430px;
-      margin: auto;
-      padding: 25px;
-      border-radius: 15px;
-      box-shadow: 0 0 15px rgba(0,0,0,0.15);
-    }
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #101722;
+    color: #f4f7fb;
+}
 
-    h1 {
-      color: #1e3a8a;
-    }
+header {
+    padding: 22px;
+    text-align: center;
+    background: #192535;
+    border-bottom: 1px solid #334155;
+}
 
-    p {
-      font-size: 18px;
-    }
+header h1 { margin: 0 0 8px; font-size: 25px; }
+header p { margin: 0; color: #aab8c8; }
 
-    span {
-      font-weight: bold;
-      color: #2563eb;
-    }
-  </style>
+.container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 24px;
+}
+
+h2 { margin-top: 0; }
+
+.battery-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 18px;
+}
+
+.battery-card {
+    background: #1c2939;
+    border: 1px solid #35465a;
+    border-radius: 14px;
+    padding: 20px;
+    cursor: pointer;
+    transition: .2s;
+}
+
+.battery-card:hover {
+    border-color: #28d99a;
+    transform: translateY(-3px);
+}
+
+.battery-card.active {
+    border: 2px solid #28d99a;
+}
+
+.battery-icon {
+    font-size: 34px;
+    margin-bottom: 12px;
+}
+
+.battery-card h3 { margin: 0 0 8px; }
+.muted { color: #aab8c8; font-size: 13px; }
+
+.progress {
+    height: 9px;
+    background: #35465a;
+    border-radius: 10px;
+    margin: 12px 0;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #28d99a;
+}
+
+button {
+    border: 0;
+    border-radius: 7px;
+    padding: 10px 15px;
+    cursor: pointer;
+    background: #28d99a;
+    color: #10251d;
+    font-weight: bold;
+}
+
+button.secondary {
+    background: #35465a;
+    color: white;
+}
+
+#detail {
+    display: none;
+    margin-top: 28px;
+}
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+}
+
+.detail-header .grow { flex: 1; }
+
+.metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+}
+
+.metric, .graph-card {
+    background: #1c2939;
+    border: 1px solid #35465a;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.metric p {
+    color: #aab8c8;
+    margin: 0 0 12px;
+    font-size: 14px;
+}
+
+.metric strong { font-size: 27px; }
+
+.graph-card { margin-top: 18px; }
+canvas { width: 100%; height: 240px; display: block; }
+
+footer {
+    text-align: center;
+    color: #8292a6;
+    padding: 25px;
+    font-size: 12px;
+}
+
+@media(max-width: 500px) {
+    .container { padding: 15px; }
+    header h1 { font-size: 21px; }
+}
+</style>
 </head>
 
 <body>
 
-  <div class="card">
-    <h1>Battery Passport</h1>
+<header>
+    <h1>EV BATTERY MONITORING SYSTEM</h1>
+    <p>Multiple Battery Data Monitoring Portal</p>
+</header>
 
-    <p>Battery ID: <span id="batteryID">Loading...</span></p>
-    <p>Manufacturer: <span id="manufacturer">Loading...</span></p>
-    <p>Voltage: <span id="voltage">Loading...</span> V</p>
-    <p>Current: <span id="current">Loading...</span> mA</p>
-    <p>Power: <span id="power">Loading...</span> mW</p>
-    <p>SOC: <span id="soc">Loading...</span> %</p>
-    <p>MOSFET: <span id="mosfet">Loading...</span></p>
-  </div>
+<main class="container">
 
-  <script type="module">
+    <section id="home">
+        <h2>Available Batteries</h2>
+        <p class="muted">
+            Click any battery to open its individual monitoring page.
+        </p>
+        <div class="battery-list" id="batteryList"></div>
+    </section>
 
-    import { initializeApp } 
-    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    <section id="detail">
+        <div class="detail-header">
+            <button class="secondary" onclick="goHome()">
+                ← All Batteries
+            </button>
+            <div class="grow">
+                <h2 id="batteryTitle">Battery Details</h2>
+                <div class="muted" id="batteryId"></div>
+            </div>
+            <button onclick="refreshData()">Refresh</button>
+        </div>
 
-    import { getFirestore, doc, onSnapshot } 
-    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        <div class="metrics">
+            <div class="metric">
+                <p>State of Charge (SOC)</p>
+                <strong id="soc">--</strong>
+                <div class="progress">
+                    <div class="progress-fill" id="socBar"
+                         style="width:0%"></div>
+                </div>
+            </div>
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCH6twfVj33X51OksHVuTpJRjBwF9Mqbhs",
-      authDomain: "major-cc830.firebaseapp.com",
-      projectId: "major-cc830",
-      storageBucket: "major-cc830.firebasestorage.app",
-      messagingSenderId: "907287322958",
-      appId: "1:907287322958:web:121c4c26f293a64baffe1f",
-      measurementId: "G-2TM66Y2H0N"
-    };
+            <div class="metric">
+                <p>Battery Voltage</p>
+                <strong id="voltage">--</strong>
+            </div>
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+            <div class="metric">
+                <p>Discharge Current</p>
+                <strong id="current">--</strong>
+            </div>
 
-    console.log("Firestore connected");
-    console.log("Reading path: batpass/12345");
+            <div class="metric">
+                <p>Battery Power</p>
+                <strong id="power">--</strong>
+            </div>
 
-    const batteryRef = doc(db, "batpass", "12345");
+            <div class="metric">
+                <p>Temperature</p>
+                <strong id="temperature">--</strong>
+            </div>
+        </div>
 
-    onSnapshot(batteryRef, (snapshot) => {
+        <div class="graph-card">
+            <h3>SOC Discharge Graph</h3>
+            <canvas id="graph" width="900" height="260"></canvas>
+            <p class="muted">
+                Sample historical SOC values for the selected battery.
+            </p>
+        </div>
 
-      console.log("Snapshot received");
+        <p style="margin-top:20px">
+            <button class="secondary" onclick="goHome()">
+                Back to Battery List
+            </button>
+        </p>
+    </section>
 
-      if (snapshot.exists()) {
+</main>
 
-        console.log("Data found:", snapshot.data());
+<footer>
+    EV Battery Monitoring System | Demonstration Website
+</footer>
 
-        const data = snapshot.data();
+<script>
+/*
+  SAMPLE DATA ONLY.
+  Replace these values with your actual battery data.
+  Each battery has its own ID and historical SOC readings.
+*/
 
-        document.getElementById("batteryID").innerText =
-          data.batteryID || "--";
+const batteries = [
+    {
+        id: "BAT-001",
+        name: "Battery 1",
+        soc: 95,
+        voltage: 4.15,
+        current: 0.80,
+        temperature: 25,
+        history: [100, 99, 98, 97, 96, 95]
+    },
+    {
+        id: "BAT-002",
+        name: "Battery 2",
+        soc: 72,
+        voltage: 3.92,
+        current: 1.50,
+        temperature: 30,
+        history: [100, 95, 90, 84, 78, 72]
+    },
+    {
+        id: "BAT-003",
+        name: "Battery 3",
+        soc: 48,
+        voltage: 3.72,
+        current: 2.40,
+        temperature: 35,
+        history: [100, 91, 80, 69, 58, 48]
+    },
+    {
+        id: "BAT-004",
+        name: "Battery 4",
+        soc: 28,
+        voltage: 3.48,
+        current: 3.30,
+        temperature: 40,
+        history: [100, 82, 65, 51, 39, 28]
+    }
+];
 
-        document.getElementById("manufacturer").innerText =
-          data.manufacturer || "--";
+let selectedBattery = null;
 
-        document.getElementById("voltage").innerText =
-          Number(data.voltage || 0).toFixed(2);
+function renderBatteryList() {
+    const list = document.getElementById("batteryList");
 
-        document.getElementById("current").innerText =
-          Number(data.current_mA || 0).toFixed(2);
+    list.innerHTML = batteries.map((b, index) => `
+        <article class="battery-card"
+                 onclick="openBattery(${index})"
+                 tabindex="0"
+                 role="button"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openBattery(${index})}">
+            <div class="battery-icon">🔋</div>
+            <h3>${b.name}</h3>
+            <div class="muted">${b.id}</div>
 
-        document.getElementById("power").innerText =
-          Number(data.power_mW || 0).toFixed(2);
+            <div class="progress">
+                <div class="progress-fill"
+                     style="width:${b.soc}%;
+                     background:${b.soc < 20 ? '#ff626e' :
+                     b.soc < 50 ? '#f5c451' : '#28d99a'}">
+                </div>
+            </div>
 
-        document.getElementById("soc").innerText =
-          Number(data.soc || 0).toFixed(1);
+            <strong>${b.soc}% SOC</strong>
+            <p class="muted">Voltage: ${b.voltage.toFixed(2)} V</p>
+            <button type="button"
+                    onclick="event.stopPropagation();openBattery(${index})">
+                View Battery Data →
+            </button>
+        </article>
+    `).join("");
+}
 
-        document.getElementById("mosfet").innerText =
-          data.mosfetState ? "ON" : "OFF";
+function openBattery(index) {
+    selectedBattery = batteries[index];
 
-      } else {
-        console.log("Document not found");
-      }
+    document.getElementById("home").style.display = "none";
+    document.getElementById("detail").style.display = "block";
 
-    }, (error) => {
-      console.error("Firestore error:", error);
+    // Create a distinct URL for each battery.
+    const url = new URL(window.location.href);
+    url.searchParams.set("battery", selectedBattery.id);
+    history.pushState({}, "", url);
+
+    renderDetails();
+    window.scrollTo(0, 0);
+}
+
+function renderDetails() {
+    const b = selectedBattery;
+    if (!b) return;
+
+    document.getElementById("batteryTitle").textContent = b.name;
+    document.getElementById("batteryId").textContent =
+        "Battery ID: " + b.id;
+
+    document.getElementById("soc").textContent =
+        b.soc + "%";
+
+    document.getElementById("socBar").style.width =
+        b.soc + "%";
+
+    document.getElementById("voltage").textContent =
+        b.voltage.toFixed(2) + " V";
+
+    document.getElementById("current").textContent =
+        b.current.toFixed(2) + " A";
+
+    document.getElementById("power").textContent =
+        (b.voltage * b.current).toFixed(2) + " W";
+
+    document.getElementById("temperature").textContent =
+        b.temperature + " °C";
+
+    drawGraph(b.history);
+}
+
+function drawGraph(values) {
+    const canvas = document.getElementById("graph");
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    const left = 55, right = 20, top = 20, bottom = 40;
+    const plotW = w - left - right;
+    const plotH = h - top - bottom;
+
+    ctx.font = "13px Arial";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#35465a";
+    ctx.fillStyle = "#aab8c8";
+
+    for (let i = 0; i <= 4; i++) {
+        const value = 100 - i * 25;
+        const y = top + plotH * i / 4;
+
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(w - right, y);
+        ctx.stroke();
+
+        ctx.fillText(value + "%", 8, y + 4);
+    }
+
+    ctx.strokeStyle = "#28d99a";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+
+    values.forEach((value, i) => {
+        const x = left + plotW * i /
+            Math.max(values.length - 1, 1);
+        const y = top + plotH * (100 - value) / 100;
+
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
     });
 
-  </script>
+    ctx.stroke();
+
+    ctx.fillStyle = "#aab8c8";
+    ctx.fillText("Measurement number →", w / 2 - 70, h - 8);
+}
+
+function goHome() {
+    selectedBattery = null;
+    document.getElementById("detail").style.display = "none";
+    document.getElementById("home").style.display = "block";
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("battery");
+    history.pushState({}, "", url);
+
+    renderBatteryList();
+    window.scrollTo(0, 0);
+}
+
+function refreshData() {
+    // Re-render current data.
+    // Connect your actual data source here for live readings.
+    renderDetails();
+}
+
+function loadFromURL() {
+    const id = new URLSearchParams(window.location.search)
+        .get("battery");
+
+    const index = batteries.findIndex(b => b.id === id);
+
+    if (index >= 0) {
+        selectedBattery = batteries[index];
+        document.getElementById("home").style.display = "none";
+        document.getElementById("detail").style.display = "block";
+        renderDetails();
+    } else {
+        document.getElementById("home").style.display = "block";
+        document.getElementById("detail").style.display = "none";
+    }
+}
+
+window.addEventListener("popstate", loadFromURL);
+
+renderBatteryList();
+loadFromURL();
+</script>
 
 </body>
 </html>
