@@ -2,651 +2,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EV Battery Passport | Live Monitoring</title>
-
-<style>
-*{box-sizing:border-box}
-body{
-  margin:0;background:#101722;color:#f4f7fb;
-  font-family:Arial,sans-serif
-}
-header{
-  padding:24px 16px;text-align:center;
-  background:#192535;border-bottom:1px solid #334155
-}
-header h1{margin:0 0 8px;font-size:25px}
-header p{margin:0;color:#aab8c8}
-.container{max-width:1150px;margin:auto;padding:24px}
-.card,.metric{
-  background:#1c2939;border:1px solid #35465a;
-  border-radius:14px;padding:20px
-}
-.grid{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-  gap:16px
-}
-.metrics{
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:15px;margin-top:18px
-}
-.metric p{margin:0 0 12px;color:#aab8c8;font-size:14px}
-.metric strong{font-size:26px;overflow-wrap:anywhere}
-.muted{color:#aab8c8;font-size:13px;line-height:1.6}
-.row{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:12px;flex-wrap:wrap
-}
-button{
-  padding:11px 15px;border:0;border-radius:7px;
-  background:#28d99a;color:#10251d;font-weight:bold;cursor:pointer
-}
-.secondary{background:#35465a;color:white}
-.status{color:#28d99a}
-.warning{color:#f5c451}
-.danger{color:#ff626e}
-.progress{
-  height:9px;background:#35465a;border-radius:10px;
-  margin:12px 0;overflow:hidden
-}
-.progress-fill{height:100%;width:0%;background:#28d99a;transition:width .3s}
-.battery-icon{font-size:32px}
-.section{margin-top:22px}
-#detail{display:none}
-canvas{width:100%;height:260px;display:block}
-#qr{background:white;padding:10px;width:max-content;max-width:100%;min-height:20px}
-#qr img,#qr canvas{max-width:100%;height:auto!important}
-footer{text-align:center;padding:25px;color:#8292a6;font-size:12px}
-a{color:#28d99a}
-input{
-  background:#101722;color:white;border:1px solid #35465a;
-  border-radius:7px;padding:10px;max-width:100%
-}
-@media(max-width:550px){
-  .container{padding:15px}
-  header h1{font-size:21px}
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battery Passport - Live Data</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: #101722;
+      color: #f4f7fb;
+    }
+    main { max-width: 900px; margin: auto; }
+    .card {
+      background: #1c2939;
+      border: 1px solid #35465a;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+    }
+    .metric {
+      background: #263548;
+      padding: 16px;
+      border-radius: 10px;
+    }
+    .label { color: #aab8c8; font-size: 14px; }
+    .value { font-size: 24px; font-weight: bold; margin-top: 10px; }
+    #status { color: #f5c451; }
+    button {
+      padding: 10px 16px;
+      border: 0;
+      border-radius: 7px;
+      background: #28d99a;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  </style>
 </head>
-
 <body>
+<main>
+  <h1>EV Battery Passport</h1>
+  <p>ESP32 + INA219 + Firebase Realtime Database</p>
 
-<header>
-  <h1>EV BATTERY PASSPORT</h1>
-  <p>Battery Identification, Traceability & Live Monitoring</p>
-</header>
+  <section class="card">
+    <h2 id="batteryID">Battery ID: Waiting...</h2>
+    <p>Manufacturer: <b id="manufacturer">--</b></p>
+    <p>Connection: <b id="status">Connecting...</b></p>
+    <p>Last record timestamp: <span id="timestamp">Not provided</span></p>
+    <button id="refresh">Refresh once</button>
+  </section>
 
-<main class="container">
-
-  <div id="home">
-    <div class="row">
-      <div>
-        <h2>Registered Batteries</h2>
-        <p class="muted">
-          Select a battery to view its passport and telemetry.
-        </p>
-      </div>
-      <button onclick="refreshAll()">Refresh All</button>
+  <section class="grid">
+    <div class="metric">
+      <div class="label">Voltage</div>
+      <div class="value" id="voltage">--</div>
     </div>
-
-    <div class="grid section" id="batteryList">
-      <div class="card">Connecting to Firebase...</div>
+    <div class="metric">
+      <div class="label">Current</div>
+      <div class="value" id="current">--</div>
     </div>
-    <p class="muted">
-      Only batteries configured in the BATTERIES array are listed.
-    </p>
-  </div>
-
-  <div id="detail">
-    <div class="row">
-      <button class="secondary" onclick="goHome()">← All Batteries</button>
-      <button onclick="refreshSelected()">Refresh Data</button>
+    <div class="metric">
+      <div class="label">Power</div>
+      <div class="value" id="power">--</div>
     </div>
-
-    <div class="row section">
-      <div>
-        <h2 id="batteryTitle">Battery Passport</h2>
-        <p class="muted" id="batteryId">Battery ID: --</p>
-      </div>
-      <span id="connection" class="warning">Connecting...</span>
+    <div class="metric">
+      <div class="label">State of Charge</div>
+      <div class="value" id="soc">--</div>
     </div>
-
-    <div class="grid section">
-      <div class="card">
-        <div class="battery-icon">🔋</div>
-        <h3>Battery Identity</h3>
-        <p>Manufacturer: <b id="manufacturer">--</b></p>
-        <p>Battery type: <b id="batteryType">--</b></p>
-        <p>Rated capacity: <b id="capacity">--</b></p>
-        <p>Application: <b>EV / eVTOL</b></p>
-        <p class="muted">Battery identity is registered separately from live sensor readings.</p>
-      </div>
-
-      <div class="card">
-        <h3>Battery Passport QR Code</h3>
-        <p class="muted">Scan to open this battery's passport URL.</p>
-        <div id="qr">Preparing QR code...</div>
-        <p class="muted">Host this page on HTTPS for access from other devices.</p>
-      </div>
-
-      <div class="card">
-        <h3>Battery Status</h3>
-        <p>ESP32 / Firebase: <b id="dataStatus" class="warning">Waiting</b></p>
-        <p>MOSFET state: <b id="mosfet">--</b></p>
-        <p>Last updated: <b id="updated">--</b></p>
-        <p>Data age: <b id="dataAge">--</b></p>
-        <p class="muted">Telemetry alone does not certify battery safety.</p>
-      </div>
+    <div class="metric">
+      <div class="label">Depth of Discharge</div>
+      <div class="value" id="dod">--</div>
     </div>
-
-    <div class="metrics">
-      <div class="metric">
-        <p>State of Charge (SOC)</p>
-        <strong id="soc">--</strong>
-        <div class="progress"><div id="socBar" class="progress-fill"></div></div>
-        <span class="muted">Use an estimated value or actual BMS SOC.</span>
-      </div>
-      <div class="metric">
-        <p>Battery Voltage</p>
-        <strong id="voltage">--</strong>
-      </div>
-      <div class="metric">
-        <p>Battery Current</p>
-        <strong id="current">--</strong>
-      </div>
-      <div class="metric">
-        <p>Calculated Power</p>
-        <strong id="power">--</strong>
-      </div>
+    <div class="metric">
+      <div class="label">State of Health</div>
+      <div class="value" id="soh">--</div>
     </div>
-
-    <div class="card section">
-      <div class="row">
-        <h3>Historical SOC</h3>
-        <span class="muted" id="historyCount">0 readings</span>
-      </div>
-      <canvas id="graph" width="1000" height="300"></canvas>
-      <p class="muted" id="graphNote">
-        Waiting for historical battery data.
-      </p>
+    <div class="metric">
+      <div class="label">MOSFET State</div>
+      <div class="value" id="mosfet">--</div>
     </div>
+  </section>
 
-    <div class="card section">
-      <h3>Battery Swap Verification</h3>
-      <p>Telemetry completeness: <b id="telemetryStatus" class="warning">Not checked</b></p>
-      <p>Passport record: <b id="passportStatus">Registered</b></p>
-      <p class="muted">
-        This demonstration checks whether expected telemetry is available.
-        It does not perform a safety inspection or calculate SOH.
-        Verify temperature, protection alarms, BMS status and other
-        safety criteria before approving a real battery swap.
-      </p>
-    </div>
-  </div>
+  <section class="card">
+    <h3>Raw API Data</h3>
+    <pre id="rawData" style="white-space:pre-wrap;overflow-wrap:anywhere">Waiting for data...</pre>
+  </section>
 </main>
 
-<footer>
-  EV Battery Passport | ESP32 + INA219 + Firebase Realtime Database
-</footer>
-
-<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-<!-- QR code library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-
 <script>
-// ======================================================
-// 1. FIREBASE CONFIGURATION
-// Firebase Console -> Project settings -> General -> Your apps
-// ======================================================
-
+// A. Paste the values from Firebase Project Settings.
 const firebaseConfig = {
-  apiKey: "AIzaSyCH6twfVj33X51OksHVuTpJRjBwF9Mqbhs",
+  apiKey: "YOUR_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_DATABASE_URL",
+  databaseURL: "YOUR_REALTIME_DATABASE_URL",
   projectId: "YOUR_PROJECT_ID",
   appId: "YOUR_APP_ID"
 };
 
-// ======================================================
-// 2. REGISTERED BATTERY INFORMATION
-// Replace the sample information with your actual details.
-// ======================================================
+// B. Replace this with the actual path in your database.
+// Examples only: "batteryData" or "batteries/BATTERY ID-001/latest".
+const DATA_PATH = "REPLACE_WITH_ACTUAL_DATA_PATH";
 
-const BATTERIES = [
-  {
-    id: "BAT-001",
-    name: "Battery 1",
-    manufacturer: "Your Manufacturer",
-    type: "LiFePO4 / Li-ion",
-    capacityAh: 25,
-    latestPath: "batteries/BAT-001/latest",
-    historyPath: "batteries/BAT-001/history"
-  },
-  {
-    id: "BAT-002",
-    name: "Battery 2",
-    manufacturer: "Your Manufacturer",
-    type: "LiFePO4 / Li-ion",
-    capacityAh: 25,
-    latestPath: "batteries/BAT-002/latest",
-    historyPath: "batteries/BAT-002/history"
-  },
-  {
-    id: "BAT-003",
-    name: "Battery 3",
-    manufacturer: "Your Manufacturer",
-    type: "LiFePO4 / Li-ion",
-    capacityAh: 25,
-    latestPath: "batteries/BAT-003/latest",
-    historyPath: "batteries/BAT-003/history"
-  },
-  {
-    id: "BAT-004",
-    name: "Battery 4",
-    manufacturer: "Your Manufacturer",
-    type: "LiFePO4 / Li-ion",
-    capacityAh: 25,
-    latestPath: "batteries/BAT-004/latest",
-    historyPath: "batteries/BAT-004/history"
-  }
-];
+const $ = id => document.getElementById(id);
 
-// Mark data stale after this many milliseconds.
-// Adjust to your ESP32 upload interval.
-const STALE_AFTER_MS = 60000;
-
-let db = null;
-let selected = null;
-let latestCache = {};
-let historyCache = {};
-let listeners = [];
-let firebaseReady = false;
-
-// ======================================================
-// 3. GENERAL HELPERS
-// ======================================================
-
-function el(id) {
-  return document.getElementById(id);
+function showStatus(message, color = "#f5c451") {
+  $("status").textContent = message;
+  $("status").style.color = color;
 }
 
-function setText(id, value) {
-  el(id).textContent = value;
-}
-
-function setStatus(id, message, className) {
-  const node = el(id);
-  node.textContent = message;
-  node.className = className || "";
-}
-
-function validNumber(value) {
-  return value !== null &&
-    value !== undefined &&
-    value !== "" &&
-    Number.isFinite(Number(value));
-}
-
-function formatNumber(value, digits = 2) {
-  return validNumber(value) ? Number(value).toFixed(digits) : "--";
-}
-
-function parseTimestamp(value) {
-  if (value === undefined || value === null || value === "") {
-    return NaN;
-  }
-
-  if (typeof value === "number") {
-    return value < 1e12 ? value * 1000 : value;
-  }
-
-  const parsed = Date.parse(value);
-  return parsed;
-}
-
-function formatTime(value) {
-  const time = parseTimestamp(value);
-  return Number.isFinite(time)
-    ? new Date(time).toLocaleString()
-    : "Timestamp unavailable";
-}
-
-// Accept common ESP32 field names.
-// Adapt this function if your existing JSON uses other names.
-function normalizeData(raw) {
-  if (!raw || typeof raw !== "object") return null;
-
-  const voltage = raw.voltage ?? raw.batteryVoltage ?? raw.voltage_V;
-
-  let current = raw.current_A ?? raw.current ?? raw.current_mA;
-  if (raw.current_mA !== undefined && raw.current_A === undefined &&
-      raw.current === undefined) {
-    current = Number(raw.current_mA) / 1000;
-  }
-
-  let power = raw.power_W ?? raw.power ?? raw.power_mW;
-  if (raw.power_mW !== undefined &&
-      raw.power_W === undefined && raw.power === undefined) {
-    power = Number(raw.power_mW) / 1000;
-  }
-
-  if (!validNumber(power) && validNumber(voltage) && validNumber(current)) {
-    power = Number(voltage) * Number(current);
-  }
-
-  return {
-    voltage: validNumber(voltage) ? Number(voltage) : null,
-    current: validNumber(current) ? Number(current) : null,
-    power: validNumber(power) ? Number(power) : null,
-    soc: validNumber(raw.soc ?? raw.SOC)
-      ? Number(raw.soc ?? raw.SOC) : null,
-    mosfet: raw.mosfetState ?? raw.mosfet_state ?? raw.mosfet ?? null,
-    timestamp: raw.timestamp ?? raw.updatedAt ?? raw.updated_at ?? null
-  };
-}
-
-// ======================================================
-// 4. BATTERY LIST
-// ======================================================
-
-function renderBatteryList() {
-  const list = el("batteryList");
-
-  list.innerHTML = BATTERIES.map((b) => {
-    const data = normalizeData(latestCache[b.id]);
-    const soc = data && data.soc !== null &&
-      data.soc >= 0 && data.soc <= 100 ? data.soc : null;
-
-    const socText = soc === null ? "--" : soc.toFixed(1) + "%";
-    const width = soc === null ? 0 : soc;
-    const color = soc === null ? "#35465a" :
-      soc < 20 ? "#ff626e" :
-      soc < 50 ? "#f5c451" : "#28d99a";
-
-    return `
-      <article class="card">
-        <div class="battery-icon">🔋</div>
-        <h3>${escapeHTML(b.name)}</h3>
-        <p class="muted">Battery ID: ${escapeHTML(b.id)}</p>
-        <p class="muted">${escapeHTML(b.manufacturer)}</p>
-        <div class="progress">
-          <div class="progress-fill"
-               style="width:${width}%;background:${color}"></div>
-        </div>
-        <p><b>${socText} SOC</b></p>
-        <p>Voltage: ${data && data.voltage !== null
-          ? data.voltage.toFixed(2) + " V" : "--"}</p>
-        <p class="muted">Source: Firebase</p>
-        <button onclick="openBattery('${b.id}')">
-          View Battery Passport →
-        </button>
-      </article>`;
-  }).join("");
-}
-
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, ch => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[ch]);
-}
-
-// ======================================================
-// 5. BATTERY PAGE AND URL
-// ======================================================
-
-function openBattery(id) {
-  const battery = BATTERIES.find(b => b.id === id);
-  if (!battery) return;
-
-  selected = battery;
-
-  const url = new URL(location.href);
-  url.searchParams.set("battery", battery.id);
-  history.pushState({}, "", url);
-
-  el("home").style.display = "none";
-  el("detail").style.display = "block";
-
-  setText("batteryTitle", battery.name);
-  setText("batteryId", "Battery ID: " + battery.id);
-  setText("manufacturer", battery.manufacturer);
-  setText("batteryType", battery.type);
-  setText("capacity", battery.capacityAh + " Ah");
-
-  makeQR(battery.id);
-  renderDetails();
-  window.scrollTo(0, 0);
-}
-
-function goHome() {
-  selected = null;
-
-  el("detail").style.display = "none";
-  el("home").style.display = "block";
-
-  const url = new URL(location.href);
-  url.searchParams.delete("battery");
-  history.pushState({}, "", url);
-
-  renderBatteryList();
-  window.scrollTo(0, 0);
-}
-
-window.addEventListener("popstate", () => {
-  const id = new URLSearchParams(location.search).get("battery");
-  if (id && BATTERIES.some(b => b.id === id)) {
-    openBatteryWithoutHistory(id);
-  } else {
-    selected = null;
-    el("detail").style.display = "none";
-    el("home").style.display = "block";
-    renderBatteryList();
-  }
-});
-
-function openBatteryWithoutHistory(id) {
-  selected = BATTERIES.find(b => b.id === id);
-  if (!selected) return;
-
-  el("home").style.display = "none";
-  el("detail").style.display = "block";
-
-  setText("batteryTitle", selected.name);
-  setText("batteryId", "Battery ID: " + selected.id);
-  setText("manufacturer", selected.manufacturer);
-  setText("batteryType", selected.type);
-  setText("capacity", selected.capacityAh + " Ah");
-
-  makeQR(selected.id);
-  renderDetails();
-}
-
-// ======================================================
-// 6. QR CODE
-// ======================================================
-
-function makeQR(id) {
-  const qr = el("qr");
-  qr.innerHTML = "";
-
-  if (location.protocol === "file:") {
-    qr.textContent = "Host this website on HTTPS to create a shareable QR.";
+function displayData(data) {
+  if (!data || typeof data !== "object") {
+    showStatus("No record found", "#ff626e");
     return;
   }
 
-  if (typeof QRCode === "undefined") {
-    qr.textContent = "QR library could not be loaded.";
-    return;
-  }
+  $("batteryID").textContent =
+    "Battery ID: " + (data.batteryID ?? "--");
 
-  const url = new URL(location.href);
-  url.searchParams.set("battery", id);
+  $("manufacturer").textContent =
+    data.manufacturer ?? "--";
 
-  new QRCode(qr, {
-    text: url.href,
-    width: 170,
-    height: 170
-  });
+  $("voltage").textContent =
+    data.voltage == null ? "--" :
+    Number(data.voltage).toFixed(3) + " V";
+
+  $("current").textContent =
+    data.current_mA == null ? "--" :
+    Number(data.current_mA).toFixed(3) + " mA";
+
+  $("power").textContent =
+    data.power_mW == null ? "--" :
+    Number(data.power_mW).toFixed(3) + " mW";
+
+  $("soc").textContent =
+    data.soc == null ? "--" :
+    Number(data.soc).toFixed(2) + "%";
+
+  $("dod").textContent =
+    data.dod == null ? "--" :
+    Number(data.dod).toFixed(2) + "%";
+
+  $("soh").textContent =
+    data.soh == null ? "--" :
+    Number(data.soh).toFixed(2) + "%";
+
+  $("mosfet").textContent =
+    typeof data.mosfetState === "boolean"
+      ? (data.mosfetState ? "ON" : "OFF")
+      : "--";
+
+  const ts = data.timestamp ?? data.updatedAt;
+  $("timestamp").textContent = ts == null
+    ? "Not provided"
+    : (typeof ts === "number"
+        ? new Date(ts < 1e12 ? ts * 1000 : ts)
+        : new Date(ts)).toLocaleString();
+
+  $("rawData").textContent = JSON.stringify(data, null, 2);
+  showStatus("Live data received", "#28d99a");
 }
 
-// ======================================================
-// 7. LIVE TELEMETRY DISPLAY
-// ======================================================
-
-function renderDetails() {
-  if (!selected) return;
-
-  const raw = latestCache[selected.id];
-  const d = normalizeData(raw);
-
-  if (!d) {
-    setStatus("dataStatus", "No readings received", "warning");
-    setStatus("telemetryStatus", "Missing", "warning");
-    setText("voltage", "--");
-    setText("current", "--");
-    setText("power", "--");
-    setText("soc", "--");
-    setText("mosfet", "--");
-    setText("updated", "--");
-    setText("dataAge", "--");
-    el("socBar").style.width = "0%";
-    drawGraph([]);
-    return;
-  }
-
-  setText("voltage",
-    d.voltage === null ? "--" : d.voltage.toFixed(2) + " V");
-
-  setText("current",
-    d.current === null ? "--" : d.current.toFixed(3) + " A");
-
-  setText("power",
-    d.power === null ? "--" : d.power.toFixed(2) + " W");
-
-  if (d.soc !== null && d.soc >= 0 && d.soc <= 100) {
-    setText("soc", d.soc.toFixed(1) + "%");
-    el("socBar").style.width = d.soc + "%";
-    el("socBar").style.background =
-      d.soc < 20 ? "#ff626e" :
-      d.soc < 50 ? "#f5c451" : "#28d99a";
-  } else {
-    setText("soc", "--");
-    el("socBar").style.width = "0%";
-  }
-
-  setText("mosfet", d.mosfet === null ? "--" : String(d.mosfet));
-  setText("updated", formatTime(d.timestamp));
-
-  const time = parseTimestamp(d.timestamp);
-  const age = Number.isFinite(time) ? Date.now() - time : NaN;
-  const fresh = Number.isFinite(age) && age >= 0 && age <= STALE_AFTER_MS;
-
-  setText("dataAge",
-    Number.isFinite(age) && age >= 0
-      ? Math.round(age / 1000) + " seconds"
-      : "Unknown");
-
-  setStatus("dataStatus",
-    fresh ? "Recent reading" : "Stale / timestamp unavailable",
-    fresh ? "status" : "warning");
-
-  const complete =
-    d.voltage !== null && d.voltage >= 0 &&
-    d.current !== null &&
-    d.soc !== null && d.soc >= 0 && d.soc <= 100;
-
-  setStatus("telemetryStatus",
-    complete ? "Required fields available" : "Incomplete",
-    complete ? "status" : "warning");
-
-  setText("passportStatus", "Registered identity; safety not certified");
-
-  const points = historyCache[selected.id] || [];
-  drawGraph(points);
-}
-
-// ======================================================
-// 8. HISTORICAL SOC GRAPH
-// ======================================================
-
-function drawGraph(points) {
-  const canvas = el("graph");
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height;
-  const left = 55, right = 20, top = 20, bottom = 40;
-  const pw = w - left - right, ph = h - top - bottom;
-
-  ctx.clearRect(0, 0, w, h);
-  ctx.font = "13px Arial";
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#35465a";
-  ctx.fillStyle = "#aab8c8";
-
-  for (let i = 0; i <= 4; i++) {
-    const value = 100 - i * 25;
-    const y = top + ph * i / 4;
-
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(w - right, y);
-    ctx.stroke();
-
-    ctx.fillText(value + "%", 8, y + 4);
-  }
-
-  const valid = (points || [])
-    .map(item => ({
-      time: parseTimestamp(item.timestamp ?? item.time),
-      soc: Number(item.soc)
-    }))
-    .filter(p => Number.isFinite(p.soc) && p.soc >= 0 && p.soc <= 100)
-    .slice(-100);
-
-  setText("historyCount", valid.length + " readings");
-
-  if (!valid.length) {
-    setText("graphNote", "No historical SOC readings available.");
-    return;
-  }
-
-  ctx.strokeStyle = "#28d99a";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-
-  valid.forEach((p, i) => {
-    const x = left + pw * i / Math.max(valid.length - 1, 1);
-    const y = top + ph * (100 - p.soc) / 100;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-
-  ctx.stroke();
-  setText("graphNote",
-    "Historical SOC values from Firebase. " +
-    "The graph uses the latest 100 readings.");
-}
-
-// ======================================================
-// 9. FIREBASE CONNECTION
-// ======================================================
-
-function startFirebase() {
+function startConnection() {
   if (
     firebaseConfig.apiKey === "YOUR_API_KEY" ||
     firebaseConfig.projectId === "YOUR_PROJECT_ID" ||
-    firebaseConfig.databaseURL === "https://YOUR_DATABASE_URL"
+    firebaseConfig.databaseURL === "YOUR_REALTIME_DATABASE_URL" ||
+    DATA_PATH === "REPLACE_WITH_ACTUAL_DATA_PATH"
   ) {
-    setStatus("connection", "Firebase not configured", "warning");
-    el("batteryList").innerHTML =
-      '<div class="card">Add your Firebase configuration in the HTML.</div>';
+    showStatus("Complete Firebase configuration first");
     return;
   }
 
@@ -655,119 +186,38 @@ function startFirebase() {
       firebase.initializeApp(firebaseConfig);
     }
 
-    db = firebase.database();
-    firebaseReady = true;
+    const db = firebase.database();
+    const ref = db.ref(DATA_PATH);
 
-    // Monitor Firebase connectivity.
-    const connectedRef = db.ref(".info/connected");
-
-    connectedRef.on("value", snapshot => {
-      if (snapshot.val() === true) {
-        if (selected) {
-          setStatus("connection", "Firebase connected", "status");
-        }
-      } else if (selected) {
-        setStatus("connection", "Disconnected", "danger");
+    // Real-time listener: updates the display whenever
+    // the selected database record changes.
+    ref.on("value", snapshot => {
+      if (snapshot.exists()) {
+        displayData(snapshot.val());
+      } else {
+        showStatus("Path exists, but no record was found", "#ff626e");
       }
+    }, error => {
+      console.error(error);
+      showStatus("Read failed: " + error.message, "#ff626e");
     });
 
-    // Listen to each battery's latest data.
-    BATTERIES.forEach(battery => {
-      const ref = db.ref(battery.latestPath);
-      listeners.push({ref, event: "value"});
-
-      ref.on("value", snapshot => {
-        latestCache[battery.id] = snapshot.exists()
-          ? snapshot.val() : null;
-
-        renderBatteryList();
-
-        if (selected && selected.id === battery.id) {
-          renderDetails();
-        }
-      }, error => {
-        console.error("Latest-data read error:", error);
-        if (selected && selected.id === battery.id) {
-          setStatus("connection", "Read permission/error", "danger");
-        }
-      });
-
-      // Historical data should be stored separately.
-      const historyRef = db.ref(battery.historyPath);
-      listeners.push({ref: historyRef, event: "value"});
-
-      historyRef.limitToLast(100).on("value", snapshot => {
-        const value = snapshot.val() || {};
-
-        historyCache[battery.id] = Object.entries(value).map(
-          ([key, item]) => ({
-            ...item,
-            time: item.timestamp ?? item.time ?? key
-          })
-        ).sort((a, b) =>
-          (parseTimestamp(a.time) || 0) -
-          (parseTimestamp(b.time) || 0)
-        );
-
-        if (selected && selected.id === battery.id) {
-          drawGraph(historyCache[battery.id]);
-        }
-      }, error => {
-        console.error("History read error:", error);
-      });
-    });
+    $("refresh").onclick = () => {
+      ref.once("value")
+        .then(snapshot => {
+          if (snapshot.exists()) displayData(snapshot.val());
+          else showStatus("No record found", "#ff626e");
+        })
+        .catch(error => showStatus(error.message, "#ff626e"));
+    };
 
   } catch (error) {
-    console.error("Firebase initialisation error:", error);
-    setStatus("connection", "Initialisation failed", "danger");
+    console.error(error);
+    showStatus("Firebase initialization failed", "#ff626e");
   }
 }
 
-// ======================================================
-// 10. REFRESH BUTTONS
-// ======================================================
-
-function refreshAll() {
-  if (!db || !firebaseReady) return;
-
-  BATTERIES.forEach(battery => {
-    db.ref(battery.latestPath).once("value")
-      .then(snapshot => {
-        latestCache[battery.id] = snapshot.val();
-        renderBatteryList();
-        if (selected && selected.id === battery.id) renderDetails();
-      })
-      .catch(error => console.error(error));
-  });
-}
-
-function refreshSelected() {
-  if (!db || !selected) return;
-
-  db.ref(selected.latestPath).once("value")
-    .then(snapshot => {
-      latestCache[selected.id] = snapshot.val();
-      renderDetails();
-    })
-    .catch(error => {
-      console.error(error);
-      setStatus("connection", "Refresh failed", "danger");
-    });
-}
-
-// ======================================================
-// 11. START THE WEBSITE
-// ======================================================
-
-renderBatteryList();
-startFirebase();
-
-const initialId = new URLSearchParams(location.search).get("battery");
-
-if (initialId && BATTERIES.some(b => b.id === initialId)) {
-  openBatteryWithoutHistory(initialId);
-}
-
+startConnection();
 </script>
 </body>
 </html>
